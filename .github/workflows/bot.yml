@@ -24,8 +24,8 @@ jobs:
       - name: Install dependencies
         run: |
           pip install -r requirements.txt
-          playwright install chromium
-          playwright install-deps chromium
+          sudo apt-get update
+          playwright install --with-deps chromium
 
       - name: Restore database from cache
         uses: actions/cache@v4
