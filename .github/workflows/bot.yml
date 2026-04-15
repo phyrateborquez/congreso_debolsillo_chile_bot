@@ -2,8 +2,8 @@ name: Bot Congreso Chile
 
 on:
   schedule:
-    # Ejecutar 1 vez al día a las 8:00 AM de Chile (12:00 UTC)
-    - cron: '0 12 * * *'
+    # Solo Miércoles(3), Jueves(4) y Viernes(5) a las 08:00 AM Chile (12:00 UTC)
+    - cron: '0 12 * * 3,4,5'
   workflow_dispatch:  # Permitir ejecución manual para testing
 
 jobs:
