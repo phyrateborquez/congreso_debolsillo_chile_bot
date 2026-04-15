@@ -8,23 +8,19 @@ on:
 
 jobs:
   run-bot:
-    runs-on: ubuntu-22.04
-    env:
-      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+    runs-on: ubuntu-latest
+    # Usar el contenedor oficial de Microsoft con todo pre-instalado
+    container:
+      image: mcr.microsoft.com/playwright/python:v1.44.0-jammy
     
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-
-      - name: Install python & browser dependencies
+      - name: Install python dependencies
         run: |
+          python -m pip install --upgrade pip
           pip install -r requirements.txt
-          playwright install chromium
 
       - name: Restore database from cache
         uses: actions/cache@v4
