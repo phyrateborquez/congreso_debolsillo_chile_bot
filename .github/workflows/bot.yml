@@ -2,8 +2,8 @@ name: Bot Congreso Chile
 
 on:
   schedule:
-    # Ejecutar cada 15 horas (aprox. 600 min/mes)
-    - cron: '0 */15 * * *'
+    # Ejecutar 1 vez al día a las 8:00 AM de Chile (12:00 UTC)
+    - cron: '0 12 * * *'
   workflow_dispatch:  # Permitir ejecución manual para testing
 
 jobs:
