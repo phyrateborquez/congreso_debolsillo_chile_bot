@@ -140,61 +140,106 @@ class LegislativeScraper:
         # Si no, usar el path como identificador
         return f"path_{parsed.path.strip('/')}"
 
-    def _scrape_page(self, url, tipo, limit=3):
+    def _scrape_page(self, url, tipo, limit=3, max_retries=3):
         """
-        Extrae proyectos de una página específica.
-        Retorna lista de dicts con: id, tipo, titulo, link, boletin
+        Extrae proyectos de una página con reintentos y debugging mejorado.
+        - Timeout aumentado a 45s para sitios gubernamentales lentos.
+        - Reintento automático en Timeout con backoff exponencial.
+        - Error CRÍTICO si el selector no existe (posible cambio de estructura).
+        - Error de conexión diferenciado del timeout.
         """
-        proyectos = []
+        from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
 
-        with sync_playwright() as p:
-            browser = p.chromium.launch(headless=self.headless)
-            context = browser.new_context(
-                user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
-            )
-            page = context.new_page()
+        GOTO_TIMEOUT    = 90000   # 90s para cargar la página completa
+        SELECTOR_TIMEOUT = 45000  # 45s para esperar el selector
+
+        for attempt in range(1, max_retries + 1):
+            proyectos = []
+            print(f"[*] Accediendo a ({tipo}) — Intento {attempt}/{max_retries}: {url}")
 
             try:
-                print(f"[*] Accediendo a ({tipo}): {url}")
-                page.goto(url, wait_until="networkidle", timeout=60000)
+                with sync_playwright() as p:
+                    browser = p.chromium.launch(headless=self.headless)
+                    context = browser.new_context(
+                        user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+                    )
+                    page = context.new_page()
 
-                # Esperar a que los artículos carguen
-                page.wait_for_selector("article.proyecto", timeout=20000)
+                    try:
+                        # --- Paso 1: navegar a la URL ---
+                        page.goto(url, wait_until="networkidle", timeout=GOTO_TIMEOUT)
 
-                items = page.query_selector_all("article.proyecto")
-                print(f"[+] Se encontraron {len(items)} proyectos de {tipo}. Limitando a los primeros {limit}.")
+                        # --- Paso 2: esperar el selector ---
+                        try:
+                            page.wait_for_selector("article.proyecto", timeout=SELECTOR_TIMEOUT)
+                        except PlaywrightTimeoutError:
+                            # ¿Existe el selector en el DOM aunque sea oculto?
+                            if page.query_selector("article.proyecto"):
+                                print(f"[~] Selector encontrado pero tardó más de lo usual en ({tipo}). Continuando.")
+                            else:
+                                print(f"[!!] CRÍTICO ({tipo}): El selector 'article.proyecto' NO existe en el DOM.")
+                                print(f"[!!] Posible cambio de estructura en el sitio de la Cámara. Revisa manualmente: {url}")
+                                log_activity("error_critico_selector", f"{tipo}: selector no encontrado en {url}")
+                                return []  # No tiene sentido reintentar un cambio de estructura
 
-                for item in items[:limit]:
-                    title_elem = item.query_selector("h3 a")
-                    boletin_elem = item.query_selector(".numero") or item.query_selector(".link-boletin")
+                        # --- Paso 3: extraer datos ---
+                        items = page.query_selector_all("article.proyecto")
+                        print(f"[+] Se encontraron {len(items)} proyectos de {tipo}. Limitando a los primeros {limit}.")
 
-                    if title_elem:
-                        titulo = title_elem.inner_text().strip()
-                        link_relativo = title_elem.get_attribute("href")
-                        link_abs = self._get_absolute_url(link_relativo)
-                        project_id = self._extract_project_id(link_abs)
+                        for item in items[:limit]:
+                            title_elem = item.query_selector("h3 a")
+                            boletin_elem = item.query_selector(".numero") or item.query_selector(".link-boletin")
 
-                        boletin = ""
-                        if boletin_elem:
-                            boletin = boletin_elem.inner_text()
-                            boletin = boletin.replace("Nº Boletín:", "").replace("N Boletn:", "").strip()
+                            if title_elem:
+                                titulo = title_elem.inner_text().strip()
+                                link_relativo = title_elem.get_attribute("href")
+                                link_abs = self._get_absolute_url(link_relativo)
+                                project_id = self._extract_project_id(link_abs)
 
-                        proyectos.append({
-                            "id": project_id,
-                            "tipo": tipo,
-                            "titulo": titulo,
-                            "link": link_abs,
-                            "boletin": boletin
-                        })
+                                boletin = ""
+                                if boletin_elem:
+                                    boletin = boletin_elem.inner_text()
+                                    boletin = boletin.replace("Nº Boletín:", "").replace("N Boletn:", "").strip()
+
+                                proyectos.append({
+                                    "id": project_id,
+                                    "tipo": tipo,
+                                    "titulo": titulo,
+                                    "link": link_abs,
+                                    "boletin": boletin
+                                })
+
+                        return proyectos  # Éxito — salir del bucle de reintentos
+
+                    except PlaywrightTimeoutError as e:
+                        # Timeout al cargar la página (goto) — reintentable
+                        print(f"[!] TIMEOUT al cargar la página ({tipo}) en intento {attempt}: {e}")
+                        log_activity("error_timeout", f"{tipo} intento {attempt}: {str(e)}")
+
+                    except Exception as e:
+                        # Error de red u otro error inesperado — reintentable
+                        print(f"[!] ERROR DE CONEXIÓN ({tipo}) en intento {attempt}: {e}")
+                        log_activity("error_conexion", f"{tipo} intento {attempt}: {str(e)}")
+
+                    finally:
+                        browser.close()
+                        print(f"[*] Navegador cerrado ({tipo}).")
 
             except Exception as e:
-                print(f"[!] Error durante el scraping de {tipo}: {e}")
-                log_activity("error_scraping", f"{tipo}: {str(e)}")
-            finally:
-                browser.close()
-                print(f"[*] Navegador cerrado ({tipo}).")
+                # Error al inicializar Playwright mismo
+                print(f"[!] ERROR CRÍTICO al iniciar Playwright ({tipo}): {e}")
+                log_activity("error_playwright", f"{tipo}: {str(e)}")
+                return []
 
-        return proyectos
+            # Backoff exponencial antes del siguiente intento (15s, 30s)
+            if attempt < max_retries:
+                wait_secs = 15 * attempt
+                print(f"[*] Esperando {wait_secs}s antes del reintento {attempt + 1}...")
+                time.sleep(wait_secs)
+
+        print(f"[!] Máximo de reintentos alcanzado para ({tipo}). Se omite esta sección.")
+        log_activity("error_max_retries", f"{tipo}: fallaron {max_retries} intentos")
+        return []
 
     def scrape_all(self, delay_between=180, limits_per_type=None):
         """
