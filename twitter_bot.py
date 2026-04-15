@@ -101,9 +101,9 @@ def main():
     init_db()
     log_activity("bot_start", "Bot iniciado")
 
-    # 1. Ejecutar scraping
+    # 1. Ejecutar scraping (Limitado a los últimos 3 por tipo)
     scraper = LegislativeScraper(headless=True)
-    all_projects = scraper.scrape_all(delay_between=180)
+    all_projects = scraper.scrape_all(delay_between=180, limit_per_type=3)
 
     print(f"\n[+] Total proyectos encontrados: {len(all_projects)}")
 

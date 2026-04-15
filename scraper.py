@@ -140,7 +140,7 @@ class LegislativeScraper:
         # Si no, usar el path como identificador
         return f"path_{parsed.path.strip('/')}"
 
-    def _scrape_page(self, url, tipo):
+    def _scrape_page(self, url, tipo, limit=3):
         """
         Extrae proyectos de una página específica.
         Retorna lista de dicts con: id, tipo, titulo, link, boletin
@@ -162,9 +162,9 @@ class LegislativeScraper:
                 page.wait_for_selector("article.proyecto", timeout=20000)
 
                 items = page.query_selector_all("article.proyecto")
-                print(f"[+] Se encontraron {len(items)} proyectos de {tipo}.")
+                print(f"[+] Se encontraron {len(items)} proyectos de {tipo}. Limitando a los primeros {limit}.")
 
-                for item in items:
+                for item in items[:limit]:
                     title_elem = item.query_selector("h3 a")
                     boletin_elem = item.query_selector(".numero") or item.query_selector(".link-boletin")
 
@@ -196,15 +196,16 @@ class LegislativeScraper:
 
         return proyectos
 
-    def scrape_all(self, delay_between=180):
+    def scrape_all(self, delay_between=180, limit_per_type=3):
         """
         Scrapea las 3 secciones con delay entre cada una.
         delay_between: segundos entre cada página (default 3 min = 180s)
+        limit_per_type: cuantos proyectos traer de cada sección
         """
         all_projects = []
 
         for tipo, url in self.URLS.items():
-            projects = self._scrape_page(url, tipo)
+            projects = self._scrape_page(url, tipo, limit=limit_per_type)
             all_projects.extend(projects)
 
             # Delay anti-detección entre páginas (excepto después de la última)
