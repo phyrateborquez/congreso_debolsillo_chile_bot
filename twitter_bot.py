@@ -101,9 +101,10 @@ def main():
     init_db()
     log_activity("bot_start", "Bot iniciado")
 
-    # 1. Ejecutar scraping (Limitado a los últimos 3 por tipo)
+    # 1. Ejecutar scraping (Límites asimétricos para priorizar leyes)
     scraper = LegislativeScraper(headless=True)
-    all_projects = scraper.scrape_all(delay_between=180, limit_per_type=3)
+    mis_limites = {"ley": 10, "resolucion": 3, "acuerdo": 3}
+    all_projects = scraper.scrape_all(delay_between=180, limits_per_type=mis_limites)
 
     print(f"\n[+] Total proyectos encontrados: {len(all_projects)}")
 

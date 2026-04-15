@@ -196,16 +196,20 @@ class LegislativeScraper:
 
         return proyectos
 
-    def scrape_all(self, delay_between=180, limit_per_type=3):
+    def scrape_all(self, delay_between=180, limits_per_type=None):
         """
         Scrapea las 3 secciones con delay entre cada una.
-        delay_between: segundos entre cada página (default 3 min = 180s)
-        limit_per_type: cuantos proyectos traer de cada sección
+        delay_between: segundos entre cada página
+        limits_per_type: diccionario {'ley': X, 'resolucion': Y, 'acuerdo': Z}
         """
+        if limits_per_type is None:
+            limits_per_type = {"ley": 3, "resolucion": 3, "acuerdo": 3}
+            
         all_projects = []
 
         for tipo, url in self.URLS.items():
-            projects = self._scrape_page(url, tipo, limit=limit_per_type)
+            limit = limits_per_type.get(tipo, 3)
+            projects = self._scrape_page(url, tipo, limit=limit)
             all_projects.extend(projects)
 
             # Delay anti-detección entre páginas (excepto después de la última)
