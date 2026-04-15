@@ -2,8 +2,8 @@ name: Bot Congreso Chile
 
 on:
   schedule:
-    # Ejecutar cada 10 horas para optimizar el consumo de GitHub Actions (Plan gratuito)
-    - cron: '0 */10 * * *'
+    # Ejecutar cada 15 horas (aprox. 600 min/mes)
+    - cron: '0 */15 * * *'
   workflow_dispatch:  # Permitir ejecución manual para testing
 
 jobs:
